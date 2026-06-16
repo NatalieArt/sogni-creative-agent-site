@@ -1,0 +1,759 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sogni — The AI agent that creates</title>
+<style>
+  @import url('https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700,900&display=swap');
+  :root{
+    --bg:#050506;
+    --ink:#f4f1ea;
+    --accent:#b6ff4e;
+    --accent-2:#3df07f;
+    --font:"Satoshi","Inter","Helvetica Neue",Arial,sans-serif;
+    --mono:"SF Mono",ui-monospace,"JetBrains Mono",Menlo,Consolas,monospace;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--ink);font-family:var(--font);-webkit-font-smoothing:antialiased}
+
+  /* scroll-snap story: one image+caption per screen, has a start and an end */
+  .scroller{position:relative;height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;scroll-behavior:smooth}
+  .slide{position:relative;height:100vh;width:100%;overflow:hidden;scroll-snap-align:start;
+    display:flex;align-items:center;justify-content:flex-start;padding:0 7%}
+  .slide img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+  /* dark gradient from the left so left text reads while the artwork shows on the right */
+  .slide::after{content:"";position:absolute;inset:0;z-index:1;pointer-events:none;
+    background:linear-gradient(to right,rgba(5,5,6,.94),rgba(5,5,6,.72) 48%,rgba(5,5,6,.35) 75%,rgba(5,5,6,.15))}
+
+  /* caption — left-aligned hero style, white with strong shadow, slides in with its image */
+  .cap{position:relative;z-index:2;max-width:100%;text-align:left;
+    opacity:0;transform:translateY(40px);transition:opacity .9s ease,transform 1s cubic-bezier(.16,1,.3,1)}
+  .cap.in{opacity:1;transform:none}
+  .cap h2{color:#fff;font-weight:800;letter-spacing:-.02em;line-height:1.04;
+    font-size:clamp(40px,8vw,112px);text-shadow:0 2px 28px rgba(0,0,0,.85),0 1px 4px rgba(0,0,0,.9)}
+  .cap h2 .accent{color:var(--accent)}
+  .cap .step{display:none}
+
+  /* scroll hint on first slide */
+  .hint{position:absolute;left:50%;bottom:34px;transform:translateX(-50%);z-index:3;
+    font-family:var(--mono);font-size:11px;letter-spacing:.18em;text-transform:uppercase;
+    color:rgba(255,255,255,.85);display:flex;flex-direction:column;align-items:center;gap:9px;
+    text-shadow:0 2px 12px rgba(0,0,0,.8);animation:bob 1.8s ease-in-out infinite}
+  .hint svg{width:18px;height:18px}
+  @keyframes bob{50%{transform:translate(-50%,6px)}}
+
+  /* top bar */
+  .topbar{position:fixed;top:0;left:0;right:0;z-index:30;display:flex;align-items:center;
+    justify-content:space-between;padding:15px 38px;background:rgba(0,0,0,.4);backdrop-filter:blur(10px);border-bottom:1px solid rgba(255,255,255,.06)}
+  .logo{display:flex;align-items:center;color:var(--accent);text-decoration:none}
+  .logo svg{height:30px;width:auto;display:block}
+  .nav{display:flex;align-items:center;gap:30px}
+  .nav .link{color:var(--accent);font-size:14.4px;font-weight:500;display:inline-flex;align-items:center;gap:6px;
+    text-decoration:none;transition:opacity .15s;cursor:pointer}
+  .nav .link:hover{opacity:.75}
+  .nav .car{font-size:10px;opacity:.9}
+  .explore{background:var(--accent);color:#000;font-weight:600;font-size:14.4px;
+    padding:11px 18px;border-radius:12px;text-decoration:none;transition:filter .2s}
+  .explore:hover{filter:brightness(1.06)}
+  /* expanding dropdown menus (like sogni) */
+  .nav .item{position:relative;display:flex;align-items:center}
+  .nav .item .car{transition:transform .18s}
+  .nav .item:hover .car{transform:rotate(180deg)}
+  .menu{position:absolute;top:calc(100% + 12px);left:-14px;min-width:250px;background:#0a0e0b;
+    border:1px solid rgba(182,255,78,.16);border-radius:14px;padding:10px;display:flex;flex-direction:column;
+    gap:1px;opacity:0;visibility:hidden;transform:translateY(10px);
+    transition:opacity .18s ease,transform .18s ease;box-shadow:0 24px 60px rgba(0,0,0,.55);z-index:40}
+  .menu::before{content:"";position:absolute;top:-14px;left:0;right:0;height:14px}
+  .nav .item:hover .menu{opacity:1;visibility:visible;transform:none}
+  .menu.right{left:auto;right:-14px}
+  .mi{display:flex;align-items:flex-start;gap:11px;padding:9px 12px;border-radius:9px;text-decoration:none}
+  .mi-ic{flex:0 0 auto;width:18px;height:18px;margin-top:1px;color:var(--accent)}
+  .mi-ic svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;display:block}
+  .mi-tx{display:flex;flex-direction:column;gap:1px;min-width:0}
+  .mi-ic.app{width:27px;height:27px;margin-top:0;border-radius:7px;overflow:hidden}
+  .mi-ic.app img{width:100%;height:100%;object-fit:cover;display:block}
+  .mi:hover{background:rgba(182,255,78,.10)}
+  .mt{color:#eafff4;font-size:14px;font-weight:600;white-space:nowrap}
+  .mi:hover .mt{color:var(--accent)}
+  .md{color:#6f8a7d;font-size:11.5px;font-weight:500;white-space:nowrap}
+  .btn{display:inline-flex;align-items:center;gap:7px;font-size:14px;font-weight:700;
+    padding:10px 20px;border-radius:999px;border:1px solid rgba(255,255,255,.18);
+    color:#fff;transition:transform .15s ease,background .2s,border-color .2s,color .2s,box-shadow .2s;cursor:pointer;text-decoration:none}
+  .btn:hover{transform:translateY(-1px)}
+  .btn-primary{background:var(--accent);color:#0c1a06;border:none;box-shadow:0 8px 28px rgba(182,255,78,.3)}
+  .btn-primary:hover{box-shadow:0 10px 34px rgba(182,255,78,.5)}
+  .btn-ghost{background:rgba(0,0,0,.25);backdrop-filter:blur(6px)}
+  .btn-ghost:hover{border-color:var(--accent);color:var(--accent);
+    box-shadow:0 0 0 1px rgba(182,255,78,.4),0 8px 26px rgba(182,255,78,.2)}
+
+  /* final hero — the "main" section with more text */
+  .hero{position:relative;min-height:100vh;width:100%;overflow:hidden;scroll-snap-align:start;
+    display:flex;align-items:center}
+  .hero img,.hero video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;
+    object-position:center;transform:scale(1.35) translateX(15%);transform-origin:center center;z-index:0}
+  .hero::after{content:"";position:absolute;inset:0;z-index:1;
+    background:linear-gradient(to right,rgba(5,5,6,.95),rgba(5,5,6,.7) 42%,rgba(5,5,6,.25) 64%,rgba(5,5,6,0) 82%)}
+  .hero .inner{position:relative;z-index:2;max-width:680px;padding:0 7%}
+  .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--accent);display:flex;align-items:center;gap:12px;margin-bottom:22px}
+  .eyebrow::before{content:"";width:34px;height:1px;background:var(--accent);opacity:.7}
+  .hero h1{font-size:clamp(40px,6vw,82px);line-height:1.02;letter-spacing:-.02em;font-weight:800}
+  .hero h1 .accent{color:var(--accent)}
+  .hero p{color:#cfccc4;font-size:clamp(16px,1.4vw,20px);margin-top:24px;max-width:54ch;line-height:1.6}
+  .hero-cta{display:flex;gap:14px;margin-top:34px;flex-wrap:wrap}
+  .hero .btn{font-size:15px;padding:14px 26px}
+
+  /* ===== added sections ===== */
+  .section{position:relative;min-height:100vh;width:100%;scroll-snap-align:start;
+    display:flex;flex-direction:column;justify-content:center;padding:88px 6% 44px;background:#050506}
+  .section::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:.5;z-index:0;
+    background-image:radial-gradient(rgba(255,255,255,.05) 1px,transparent 1px);background-size:34px 34px}
+  .bgart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.10;z-index:0;pointer-events:none}
+  .section > *:not(.bgart):not(.promptbar):not(.loopbg):not(.bgvid):not(.cta-veil){position:relative;z-index:1}
+  .loopbg{position:absolute;inset:0;overflow:hidden;z-index:0;pointer-events:none;opacity:.18}
+  .loopbg .loopcol{display:flex;flex-direction:column;will-change:transform;animation:loopUp 55s linear infinite}
+  .loopbg img{width:100%;height:auto;display:block}
+  @keyframes loopUp{from{transform:translateY(0)}to{transform:translateY(-50%)}}
+  .promptbar{position:absolute;top:90px;left:0;right:0;z-index:2;overflow:hidden;
+    border-top:1px solid rgba(255,255,255,.07);border-bottom:1px solid rgba(255,255,255,.07);padding:13px 0;
+    -webkit-mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent);
+    mask-image:linear-gradient(90deg,transparent,#000 6%,#000 94%,transparent)}
+  .promptbar .track{display:flex;gap:38px;width:max-content;animation:promptScroll 30s linear infinite;
+    font-family:var(--mono);font-size:14px;white-space:nowrap;color:#cfccc4}
+  .promptbar .track .sep{color:var(--accent)}
+  @keyframes promptScroll{to{transform:translateX(-50%)}}
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1080px;margin:40px auto 0;width:100%}
+  .card2{background:linear-gradient(180deg,#0d1220,#0a0d15);border:1px solid rgba(255,255,255,.08);
+    border-radius:18px;overflow:hidden;transition:border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+  .card2.lime{border-color:rgba(182,255,78,.38)}
+  .card2:hover{border-color:rgba(182,255,78,.6);transform:translateY(-5px);box-shadow:0 26px 64px rgba(0,0,0,.5)}
+  .cards:hover .card2{opacity:.4;transition:opacity .25s ease,border-color .2s ease,transform .2s ease,box-shadow .2s ease}
+  .cards:hover .card2:hover{opacity:1}
+  .winbar{display:flex;align-items:center;gap:12px;padding:13px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+  .tl{display:flex;gap:7px}.tl i{width:11px;height:11px;border-radius:50%;display:block}
+  .tl i:nth-child(1){background:#ff5f57}.tl i:nth-child(2){background:#febc2e}.tl i:nth-child(3){background:#28c840}
+  .urlpill{font-family:var(--mono);font-size:12px;color:var(--accent);background:rgba(255,255,255,.05);padding:4px 12px;border-radius:999px}
+  .card2 .cbody{padding:28px 28px 30px}
+  .card2 h3{font-size:26px;font-weight:700;color:#fff;letter-spacing:-.01em}
+  .card2 p{color:#a7a39b;margin:14px 0 24px;font-size:15px;line-height:1.55}
+  .card2 .shot{display:block;width:100%;height:230px;object-fit:cover;object-position:top;margin-top:20px;border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.45)}
+  .npx{font-family:var(--mono);background:rgba(182,255,78,.14);color:var(--accent);padding:1px 7px;border-radius:5px}
+  .samenote{text-align:center;color:rgba(255,255,255,.82);font-family:var(--mono);font-size:14px;margin-top:28px;text-shadow:0 2px 12px rgba(0,0,0,.85)}
+  .showcase{align-items:center}
+  .showgrid{display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1180px;width:100%;margin:0 auto;align-items:start}
+  .showgrid.one{grid-template-columns:1fr;max-width:900px}
+  .bmock{width:100%;border-radius:16px;overflow:hidden;border:1px solid rgba(182,255,78,.32);background:#0d1117;box-shadow:0 22px 56px rgba(0,0,0,.5),0 0 0 1px rgba(182,255,78,.1)}
+  .bmock>img,.bmock>video{width:100%;height:auto;display:block}
+  @media(max-width:820px){ .showgrid{grid-template-columns:1fr} }
+  /* what it creates */
+  .creates h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;margin:8px 0 0;line-height:1.04}
+  .ccards{display:grid;grid-template-columns:repeat(3,1fr);gap:24px;max-width:1200px;margin:38px auto 0;width:100%}
+  .ccard{background:linear-gradient(180deg,#0d1220,#0a0d15);border:1px solid rgba(255,255,255,.08);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .2s ease,transform .2s ease}
+  .ccard:hover{border-color:rgba(182,255,78,.45);transform:translateY(-4px)}
+  .ccard .media{position:relative;height:166px;border-bottom:1px solid rgba(255,255,255,.06);background:#070a10}
+  .ccard .media>img,.ccard .media>video{width:100%;height:100%;object-fit:cover;display:block}
+  .ccard .media .mlabel{position:absolute;left:14px;bottom:12px;font-family:var(--mono);font-size:12px;color:#eafff4;background:rgba(0,0,0,.55);padding:4px 9px;border-radius:6px}
+  .wave{display:flex;align-items:flex-end;justify-content:center;gap:6px;height:100%;padding:34px 22px}
+  .wave span{width:9px;border-radius:3px;background:linear-gradient(180deg,#c8ff6e,#3fd07f)}
+  .cc-body{padding:18px 22px 22px}
+  .cc-body h3{font-size:20px;font-weight:700;color:var(--accent);margin-bottom:12px}
+  .cc-body ul{list-style:none}
+  .cc-body li{display:flex;align-items:center;gap:11px;color:#a7a39b;font-size:14.5px;margin-bottom:9px}
+  .cc-body li:last-child{margin-bottom:0}
+  .cc-body li::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent);flex:0 0 auto}
+  @media(max-width:880px){ .ccards{grid-template-columns:1fr} }
+  /* superpowers */
+  .powers h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;margin:6px 0 0;line-height:1.04}
+  .pgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;max-width:1120px;margin:30px auto 0;width:100%}
+  .pcard{background:linear-gradient(180deg,rgba(255,255,255,.035),rgba(255,255,255,.012));border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:22px 22px;transition:border-color .2s ease,transform .2s ease}
+  .pcard:hover{border-color:rgba(182,255,78,.4);transform:translateY(-4px)}
+  .pcard:hover .pico{box-shadow:0 0 30px rgba(182,255,78,.3);border-color:rgba(182,255,78,.5)}
+  .pico{width:46px;height:46px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;
+    background:linear-gradient(160deg,rgba(182,255,78,.18),rgba(63,208,127,.07));border:1px solid rgba(182,255,78,.28);box-shadow:0 0 22px rgba(182,255,78,.12);transition:box-shadow .2s ease,border-color .2s ease}
+  .pico svg{width:22px;height:22px;stroke:var(--accent);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  .pcard h3{font-size:19px;font-weight:700;color:#fff;margin-bottom:8px}
+  .pcard p{color:#a7a39b;font-size:14.5px;line-height:1.5}
+  @media(max-width:880px){ .pgrid{grid-template-columns:1fr} }
+  /* photo to finished ad */
+  .ad h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;margin:8px 0 0;line-height:1.04}
+  .adgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px;max-width:1200px;margin:42px auto 0;width:100%}
+  .adstep{position:relative}
+  .adnum{position:absolute;top:-14px;left:-6px;width:36px;height:36px;border-radius:50%;background:var(--accent);color:#0c1a06;font-weight:800;display:flex;align-items:center;justify-content:center;font-size:16px;z-index:2;box-shadow:0 6px 20px rgba(182,255,78,.35)}
+  .admedia{position:relative;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#070a10;aspect-ratio:16/9}
+  .admedia>img,.admedia>video{width:100%;height:100%;object-fit:cover;display:block}
+  .adtag{position:absolute;top:10px;right:10px;font-family:var(--mono);font-size:12px;color:#eafff4;background:rgba(0,0,0,.55);padding:4px 9px;border-radius:6px;display:inline-flex;gap:6px;align-items:center;cursor:zoom-in}
+  .admedia.zoomable{cursor:zoom-in}
+  .lightbox{position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.93);display:none;align-items:center;justify-content:center;padding:30px;cursor:zoom-out}
+  .lightbox.open{display:flex}
+  .lightbox img{max-width:96vw;max-height:92vh;border-radius:10px;box-shadow:0 30px 90px rgba(0,0,0,.6)}
+  .lightbox .lbclose{position:absolute;top:18px;right:26px;color:#fff;font-size:38px;line-height:1;cursor:pointer}
+  .ad .adsub{color:#a7a39b;font-size:16px;line-height:1.55;max-width:62ch;margin-top:16px}
+  .adcap{margin-top:16px;color:#fff;font-size:18px;font-weight:600}
+  .addesc{margin-top:8px;color:#a7a39b;font-size:14.5px;line-height:1.55}
+  .adlink{display:inline-block;margin-top:28px;color:var(--accent);font-family:var(--mono);font-size:14px;text-decoration:none}
+  .adlink:hover{text-decoration:underline}
+  /* virtual influencer */
+  .vinf h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;margin:8px 0 0;line-height:1.04}
+  .vsub{color:#a7a39b;font-size:16px;line-height:1.55;max-width:62ch;margin-top:16px}
+  .vgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;max-width:1080px;margin:36px auto 0;width:100%}
+  .vcard{position:relative;aspect-ratio:1/1;border-radius:16px;overflow:hidden;border:1px solid rgba(255,255,255,.1);background:#070a10}
+  .vcard video{width:100%;height:100%;object-fit:cover;display:block}
+  @media(max-width:820px){ .vgrid{grid-template-columns:1fr;max-width:420px} }
+  @media(max-width:880px){ .adgrid{grid-template-columns:1fr} }
+  .fb{max-width:1080px;margin:0 auto;width:100%}
+  .fb h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;margin:6px 0 14px;line-height:1.04}
+  .fb h2 .accent{color:var(--accent)}
+  .fb .lead{color:#a7a39b;max-width:54ch;font-size:14.5px;line-height:1.5;margin-bottom:14px}
+  .term2{background:#0a0e16;border:1px solid rgba(255,255,255,.08);border-radius:16px;overflow:hidden}
+  .term2 .top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;
+    border-bottom:1px solid rgba(255,255,255,.06);font-family:var(--mono);font-size:13px;color:#8a8f86}
+  .ver{font-family:var(--mono);font-size:12px;color:#8a8f86;border:1px solid rgba(255,255,255,.12);padding:4px 10px;border-radius:999px}
+  .row{display:grid;grid-template-columns:130px minmax(0,1fr) auto;align-items:center;gap:18px;padding:10px 18px;border-bottom:1px solid rgba(255,255,255,.05)}
+  .row:last-child{border-bottom:none}
+  .row .tag{font-family:var(--mono);font-size:12px;letter-spacing:.1em;color:#8a8f86}
+  .row.fastest{background:linear-gradient(90deg,rgba(182,255,78,.07),transparent);border-left:3px solid var(--accent)}
+  .row.fastest .tag{color:var(--accent)}
+  .row .cmd{font-family:var(--mono);font-size:14px;color:#e8e6e0;line-height:1.5;min-width:0;overflow-wrap:anywhere}
+  .row .cmd .d{color:var(--accent)}
+  .row .desc{display:block;color:#6f8a7d;font-size:12.5px;margin-top:6px}
+  .copy{font-family:var(--mono);font-size:13px;color:var(--accent);background:transparent;
+    border:1px solid rgba(182,255,78,.32);padding:8px 16px;border-radius:9px;cursor:pointer;transition:background .15s}
+  .copy:hover{background:rgba(182,255,78,.12)}
+  .term-foot{padding:10px 18px;font-family:var(--mono);font-size:12px;color:#8a8f86;line-height:1.6}
+  .term-foot .an{color:var(--accent)}
+  .fb-btns{display:flex;gap:14px;margin-top:14px;flex-wrap:wrap}
+  /* powered by the supernet */
+  .super .sgrid{display:grid;grid-template-columns:1.05fr 1fr;gap:50px;align-items:center;max-width:1180px;margin:0 auto;width:100%}
+  .super h2{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.02em;color:#fff;line-height:1.04;margin:8px 0 18px}
+  .super p{color:#a7a39b;font-size:16px;line-height:1.55;max-width:46ch;margin-bottom:26px}
+  .super .sbtns{display:flex;gap:14px;flex-wrap:wrap}
+  .globe{position:relative;border-radius:18px;overflow:hidden;border:1px solid rgba(255,255,255,.1);aspect-ratio:16/11}
+  .globe>img{width:100%;height:100%;object-fit:cover;display:block;opacity:.85}
+  .globe iframe{width:100%;height:100%;border:0;display:block;background:#05070c}
+  .globe .pill{position:absolute;left:16px;top:16px;display:flex;flex-direction:column;background:rgba(10,12,16,.7);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.12);border-radius:12px;padding:10px 14px;color:#fff;font-weight:600;font-size:15px}
+  .globe .pill small{color:#9aa0a6;font-weight:500;font-size:12px;font-family:var(--mono);margin-top:3px}
+  .globe .statbar{position:absolute;left:14px;right:14px;bottom:14px;display:flex;align-items:center;gap:14px;background:rgba(8,10,12,.82);border:1px solid rgba(255,255,255,.1);border-radius:12px;padding:10px 14px;font-family:var(--mono);font-size:12px;color:#9aa0a6;flex-wrap:wrap}
+  .globe .statbar .live{color:var(--accent)}
+  @media(max-width:820px){ .super .sgrid{grid-template-columns:1fr} }
+  .cta{text-align:center;align-items:center;background:radial-gradient(70% 80% at 50% 55%,rgba(120,200,60,.12),transparent 70%),#050506}
+  .cta h1{font-size:clamp(30px,4vw,50px);font-weight:800;letter-spacing:-.03em;color:#fff;line-height:1.02}
+  .cta h1 .accent{color:var(--accent)}
+  .cta-btns{display:flex;gap:16px;justify-content:center;margin-top:36px;flex-wrap:wrap}
+  .cta .submono{font-family:var(--mono);color:rgba(255,255,255,.82);font-size:15px;margin-top:26px;text-shadow:0 2px 12px rgba(0,0,0,.8)}
+  .cta .bgvid{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}
+  .cta .cta-veil{position:absolute;inset:0;z-index:0;background:radial-gradient(80% 100% at 50% 50%,rgba(5,5,6,.55),rgba(5,5,6,.85))}
+
+  /* dropdown item icons (like sogni) */
+
+  /* footer — identical to sogni (uui-footer01) */
+  .footer{display:none}
+  .footer-x{position:relative;scroll-snap-align:start;background:transparent;border-top:1px solid rgba(255,255,255,.08);padding:64px 6% 30px}
+  .f-top{max-width:1220px;margin:0 auto;display:flex;justify-content:space-between;gap:56px;flex-wrap:wrap}
+  .f-left{max-width:380px}
+  .f-left .flogo{display:inline-block;color:var(--accent);margin-bottom:22px}
+  .f-left .flogo svg{height:30px;width:auto;display:block}
+  .f-social{display:flex;gap:12px;flex-wrap:wrap}
+  .f-social a{width:40px;height:40px;border-radius:10px;border:1px solid rgba(255,255,255,.12);
+    display:flex;align-items:center;justify-content:center;color:#9aa0a6;transition:.15s}
+  .f-social a:hover{color:var(--accent);border-color:rgba(182,255,78,.45)}
+  .f-social svg{width:18px;height:18px;fill:currentColor}
+  .f-right{min-width:320px;max-width:430px}
+  .f-right h4{color:#fff;font-size:18px;font-weight:600;margin-bottom:14px}
+  .f-sub{display:flex;gap:10px}
+  .f-sub input{flex:1;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.14);border-radius:10px;
+    padding:12px 14px;color:#fff;font-size:14px;font-family:var(--font)}
+  .f-sub button{background:var(--accent);color:#000;border:none;border-radius:10px;padding:12px 22px;font-weight:600;cursor:pointer;font-size:14px}
+  .f-note{color:#6f7d75;font-size:13px;margin-top:13px}
+  .f-note a{color:#9aa0a6;text-decoration:underline}
+  .f-waitlist{display:inline-block;color:#9aa0a6;font-size:13px;margin-top:9px;text-decoration:none}
+  .f-waitlist:hover{color:var(--accent)}
+  .f-bottom{max-width:1220px;margin:40px auto 0;padding-top:22px;border-top:1px solid rgba(255,255,255,.08);
+    display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;color:#6f7d75;font-size:13px}
+  .f-bottom a{color:#9aa0a6;text-decoration:none}
+  .f-bottom .fl a{margin-left:22px}
+  .f-bottom a:hover{color:var(--accent)}
+  @media(max-width:760px){ .f-top{flex-direction:column;gap:34px} }
+
+  @media(max-width:980px){ .nav .link{display:none} }
+  @media(max-width:820px){ .cards{grid-template-columns:1fr} .row{grid-template-columns:1fr;gap:8px} .row .copy{justify-self:start} }
+  @media(max-width:640px){ .cap h2{font-size:clamp(28px,8vw,54px)} }
+
+  /* ===== mobile ===== */
+  @media(max-width:768px){
+    .topbar{padding:11px 18px}
+    .logo svg{height:24px}
+    .nav{gap:0}
+    .nav .item,.nav .link{display:none}
+    .explore{padding:9px 14px;font-size:13px}
+    /* free, native scrolling on mobile (no forced snap) + sections flow naturally */
+    .scroller{scroll-snap-type:none}
+    .section{min-height:auto;padding:80px 7% 54px}
+    .slide{height:auto;min-height:82vh;padding:0 7%}
+    .hero{min-height:90vh}
+    .hero .inner{max-width:none;padding:0 7%}
+    .hero h1{font-size:clamp(34px,11vw,52px)}
+    .hero p{font-size:16px;max-width:none}
+    .hero img,.hero video{transform:none;object-position:64% center}
+    .cap{max-width:100%}
+    .cap h2{font-size:clamp(30px,8.6vw,46px)}
+    .promptbar{top:74px}
+    .promptbar .track{font-size:12.5px;gap:24px}
+    .creates h2,.ad h2,.vinf h2,.powers h2,.fb h2,.super h2,.cta h1{font-size:clamp(28px,7.5vw,40px)}
+    .ccards,.pgrid,.adgrid,.cards,.super .sgrid,.vgrid{gap:16px}
+    .vgrid{max-width:340px}
+    .showgrid.one{max-width:100%}
+    .ad .adsub,.vsub,.super p,.fb .lead,.card2 p{font-size:14.5px}
+    .bmock{max-width:100%}
+    .term2 .top{font-size:11.5px;flex-wrap:wrap;gap:8px}
+    .adgrid{margin-top:24px}
+  }
+</style>
+</head>
+<body>
+  <header class="topbar">
+    <a class="logo" href="https://www.sogni.ai" target="_blank" rel="noopener" aria-label="Sogni">
+      <svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 387 160"><path fill="currentColor" d="M17.2,106.99c5.33,2.29,11.3,3.41,17.95,3.41,7.03,0,13.11-1.33,18.23-3.98,5.23-2.75,9.17-6.34,11.82-10.81,2.76-4.44,4.12-9.19,4.12-14.2,0-6.24-1.47-11.22-4.43-14.92-2.86-3.8-6.36-6.57-10.53-8.37-4.09-1.8-9.4-3.59-15.96-5.39-4.94-1.34-8.83-2.57-11.69-3.7-2.86-1.13-5.23-2.64-7.13-4.54-1.8-1.98-2.7-4.49-2.7-7.52,0-4.44,1.47-7.86,4.4-10.22,2.94-2.36,6.75-3.54,11.41-3.54,5.12,0,9.27,1.28,12.39,3.83,3.14,2.57,4.84,5.62,5.12,9.24h17.95c-.67-8.34-4.09-14.87-10.25-19.62-6.08-4.83-13.9-7.24-23.51-7.24-6.75,0-12.67,1.13-17.82,3.41-5.12,2.29-9.11,5.55-11.97,9.81C1.73,26.91.31,31.89.31,37.56c0,6.16,1.42,11.09,4.27,14.76,2.86,3.7,6.28,6.44,10.25,8.24,4.09,1.69,9.35,3.42,15.81,5.11,5.12,1.34,9.11,2.57,11.97,3.7,2.94,1.13,5.36,2.75,7.26,4.83,1.98,2.08,2.99,4.78,2.99,8.09,0,4.26-1.57,7.75-4.71,10.5-3.104,2.64-7.49,3.98-13.11,3.98s-9.63-1.36-12.67-4.11c-2.94-2.75-4.61-6.24-5-10.5H0c0,5.67,1.52,10.66,4.56,14.92,3.04,4.26,7.21,7.57,12.54,9.94l.1-.03ZM102.48,105.71c5.97,3.31,12.67,4.98,20.08,4.98s14.34-1.67,20.52-4.98c6.28-3.42,11.2-8.19,14.83-14.35,3.6-6.16,5.41-13.22,5.41-21.16s-1.75-15.02-5.28-21.16c-3.53-6.14-8.32-10.89-14.39-14.2-6.08-3.31-12.87-4.98-20.37-4.98s-14.29,1.67-20.37,4.98c-6.08,3.31-10.87,8.06-14.39,14.2-3.53,6.16-5.28,13.22-5.28,21.16s1.7,15.15,5.12,21.31c3.42,6.06,8.11,10.81,14.11,14.2ZM134.25,93.64c-3.61,1.98-7.49,2.98-11.69,2.98-6.54,0-12.03-2.29-16.38-6.83-4.27-4.65-6.41-11.17-6.41-19.62,0-5.67,1.06-10.48,3.14-14.35,2.08-3.98,4.89-6.96,8.39-8.96,3.61-1.98,7.49-2.98,11.69-2.98s8.08,1,11.69,2.98c3.6,1.98,6.51,4.98,8.7,8.96,2.19,3.88,3.27,8.68,3.27,14.35s-1.13,10.5-3.42,14.48c-2.29,3.98-5.28,6.96-8.99,8.96v.03ZM227.1,33.53c-4.66-2.46-10.02-3.7-16.09-3.7-6.85,0-13.11,1.69-18.8,5.11-5.61,3.31-10.07,8.01-13.39,14.07-3.22,6.06-4.84,13.02-4.84,20.88s1.62,14.92,4.84,21.16c3.32,6.16,7.78,10.99,13.39,14.48,5.69,3.42,11.97,5.11,18.8,5.11,5.97,0,11.3-1.23,15.96-3.7,4.74-2.57,8.5-5.67,11.25-9.37v13.07c0,7.57-2.03,13.35-6.13,17.33-3.99,3.98-9.27,5.96-15.81,5.96-5.61,0-10.45-1.28-14.52-3.83-3.99-2.46-6.59-5.72-7.83-9.81h-16.09c.95,8.53,4.94,15.25,11.97,20.18,7.03,5.03,15.86,7.52,26.5,7.52,7.98,0,14.81-1.62,20.52-4.83,5.79-3.21,10.22-7.68,13.26-13.35,3.04-5.6,4.56-11.99,4.56-19.18V31.07h-16.38v11.37c-2.65-3.59-6.36-6.57-11.12-8.96l-.05.05ZM234.8,56.13c2.29,3.98,3.42,8.68,3.42,14.07s-1.13,10.14-3.42,14.2c-2.19,3.98-5.07,7.01-8.7,9.09-3.61,2.08-7.49,3.13-11.69,3.13s-7.98-1.05-11.69-3.13c-3.6-2.18-6.57-5.32-8.83-9.37-2.19-4.08-3.27-8.81-3.27-14.2s1.08-10.04,3.27-13.92c2.29-3.98,5.23-6.96,8.83-8.96,3.6-2.08,7.49-3.13,11.69-3.13s8.08,1.05,11.69,3.13c3.6,2.08,6.51,5.11,8.7,9.09ZM332.08,33.69c-4.84-2.57-10.35-3.83-16.53-3.83-4.66,0-9.06.9-13.26,2.7-4.09,1.8-7.47,4.31-10.12,7.52v-8.96h-16.25v78.29h16.25v-43.75c0-7.01,1.75-12.35,5.28-16.05,3.61-3.8,8.45-5.67,14.52-5.67s10.87,1.9,14.39,5.67c3.5,3.7,5.28,9.04,5.28,16.05v43.75h16.09v-46.17c0-7.11-1.37-13.17-4.12-18.18-2.76-5.03-6.59-8.81-11.54-11.37ZM369.34,17.77c1.98,1.98,4.45,2.98,7.42,2.98s5.28-1,7.26-2.98c1.98-1.98,2.99-4.44,2.99-7.39s-1-5.39-2.99-7.39c-1.98-1.98-4.43-2.98-7.26-2.98s-5.41,1-7.42,2.98c-1.98,1.98-2.99,4.44-2.99,7.39s1,5.39,2.99,7.39ZM384.71,109.41V31.12h-16.25v78.29h16.25Z"></path></svg>
+    </a>
+    <nav class="nav">
+      <div class="item">
+        <span class="link">Build <span class="car">▾</span></span>
+        <div class="menu">
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v2M15 2v2M9 20v2M15 20v2M2 9h2M2 15h2M20 9h2M20 15h2"/></svg></span><span class="mi-tx"><span class="mt">Sogni Intelligence</span><span class="md">OpenAI-compatible API + tools</span></span></a>
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span><span class="mi-tx"><span class="mt">API Reference</span><span class="md">Endpoints, schemas & examples</span></span></a>
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3M13 15h4"/></svg></span><span class="mi-tx"><span class="mt">Sogni SDK</span><span class="md">TypeScript clients for the Supernet</span></span></a>
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5z"/></svg></span><span class="mi-tx"><span class="mt">Developer Tutorials</span><span class="md">Quickstart, recipes, case studies</span></span></a>
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1"/></svg></span><span class="mi-tx"><span class="mt">Pricing</span><span class="md">Compute credits & plans</span></span></a>
+          <a class="mi" href="https://www.sogni.ai/agent" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/></svg></span><span class="mi-tx"><span class="mt">Sogni Creative Agent Skill</span><span class="md">Give your agent creative superpowers</span></span></a>
+          <a class="mi" href="https://docs.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h6"/></svg></span><span class="mi-tx"><span class="mt">View All Docs</span><span class="md">docs.sogni.ai ›</span></span></a>
+        </div>
+      </div>
+
+      <div class="item">
+        <span class="link">Super Apps <span class="car">▾</span></span>
+        <div class="menu">
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/chatCircle_1024.png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Chat</span><span class="md">for web</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/6858727bd736fc74bded4e3b_studio1024_square%20(1).png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Studio Pro</span><span class="md">for Mac</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/6858730acc30a649aa708c01_moonWeb_square%20(1).png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Create</span><span class="md">for web</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/685872bcc09113ea70cc7bbf_iosMoon_1024%20(3).png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Pocket</span><span class="md">for iOS</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/6858730acc30a649aa708c01_moonWeb_square%20(1).png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Create</span><span class="md">for Android</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/IconSogniRestore-iOS-Dark-1024x1024@1x.png" alt=""></span><span class="mi-tx"><span class="mt">Sogni Restore</span><span class="md">for web</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/360_clear_1024.png" alt=""></span><span class="mi-tx"><span class="mt">Sogni 360</span><span class="md">for web</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic app"><img src="https://cdn.prod.website-files.com/6630875599550e7ce589dac0/696521ec4d4359aa2e98691f_685e36a499442f0d1bf3ae67_7ba0384252a428f14ae95b1d54862f8d_photobooth.jpg" alt=""></span><span class="mi-tx"><span class="mt">Sogni Photobooth</span><span class="md">for web</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg></span><span class="mi-tx"><span class="mt">View All Super Apps</span><span class="md">Powered by the Sogni Supernet ›</span></span></a>
+        </div>
+      </div>
+
+      <div class="item">
+        <span class="link">Supernet <span class="car">▾</span></span>
+        <div class="menu">
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4"/></svg></span><span class="mi-tx"><span class="mt">Supernet</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg></span><span class="mi-tx"><span class="mt">Build · SDK</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span><span class="mi-tx"><span class="mt">Live View</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/></svg></span><span class="mi-tx"><span class="mt">AI Models</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="7" rx="2"/><rect x="2" y="14" width="20" height="7" rx="2"/><path d="M6 6.5h.01M6 17.5h.01"/></svg></span><span class="mi-tx"><span class="mt">System Status</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M8 21h8M12 17v4M6 4h12v5a6 6 0 0 1-12 0z"/><path d="M6 4H4v2a3 3 0 0 0 2 2.8M18 4h2v2a3 3 0 0 1-2 2.8"/></svg></span><span class="mi-tx"><span class="mt">Leaderboard</span></span></a>
+        </div>
+      </div>
+
+      <a class="link" href="https://www.sogni.ai/blog" target="_blank" rel="noopener">Blog</a>
+      <a class="link" href="https://docs.sogni.ai" target="_blank" rel="noopener">Docs</a>
+
+      <div class="item">
+        <span class="link">Company <span class="car">▾</span></span>
+        <div class="menu right">
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8"/></svg></span><span class="mi-tx"><span class="mt">Our Team</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg></span><span class="mi-tx"><span class="mt">Contact Us</span></span></a>
+          <a class="mi" href="https://www.sogni.ai" target="_blank" rel="noopener"><span class="mi-ic"><svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="1"/><circle cx="17.5" cy="10.5" r="1"/><circle cx="8.5" cy="7.5" r="1"/><circle cx="6.5" cy="12.5" r="1"/><path d="M12 2a10 10 0 1 0 0 20c1 0 1.6-.8 1.6-1.7 0-.4-.2-.8-.5-1.1-.3-.3-.5-.7-.5-1.1 0-.9.7-1.6 1.6-1.6H16a4 4 0 0 0 4-4 8 8 0 0 0-8-8z"/></svg></span><span class="mi-tx"><span class="mt">Brand Kit</span></span></a>
+        </div>
+      </div>
+
+      <a class="explore" href="https://www.sogni.ai/super-apps" target="_blank" rel="noopener">Explore Apps</a>
+    </nav>
+  </header>
+
+  <main class="scroller" id="scroller">
+
+    <!-- MAIN SECTION FIRST -->
+    <section class="hero">
+      <video src="images/hero.mp4" autoplay muted loop playsinline></video>
+      <div class="inner">
+        <div class="eyebrow">Sogni Creative Agent</div>
+        <h1>The AI agent that <span class="accent">creates.</span></h1>
+        <p>Images. Video. Music. Tell it what you want in plain English — it plans, generates, and delivers finished media on Sogni's decentralized GPU network.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://chat.sogni.ai" target="_blank" rel="noopener">Launch Agent ↗</a>
+          <a class="btn btn-ghost" href="#for-builders">Install the Skill</a>
+        </div>
+      </div>
+      <div class="hint">scroll
+        <svg viewBox="0 0 24 24" fill="none"><path d="M6 9l6 6 6-6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+    </section>
+
+    <section class="slide">
+      <img src="images/img01.png" alt="">
+      <div class="cap"><h2>The age of <span class="accent">AI agents</span> is here.</h2></div>
+    </section>
+
+    <section class="slide">
+      <img src="images/img03.png" alt="">
+      <div class="cap"><h2>Create faster and cheaper. Right inside <span class="accent">your terminal.</span></h2></div>
+    </section>
+
+    <section class="slide">
+      <img src="images/img05.png" alt="">
+      <div class="cap"><h2>Claude, Codex, Hermes. Powered by the <span class="accent">Sogni Skill.</span></h2></div>
+    </section>
+
+    <!-- BROWSER / AGENT -->
+    <section class="section">
+      <img class="bgart" src="images/img04.png" alt="" style="opacity:.2;object-position:center">
+      <div class="promptbar"><div class="track" id="ptrack"></div></div>
+      <div class="cards">
+        <div class="card2 lime">
+          <div class="winbar"><span class="tl"><i></i><i></i><i></i></span><span class="urlpill">chat.sogni.ai</span></div>
+          <div class="cbody">
+            <h3>In your browser</h3>
+            <p>Sogni Chat — no install, 30+ creative tools, 400 free credits every month. Just open a tab and start creating.</p>
+            <a class="btn btn-primary" href="https://chat.sogni.ai" target="_blank" rel="noopener">Open Sogni Chat ↗</a>
+          </div>
+        </div>
+        <div class="card2">
+          <div class="winbar"><span class="tl"><i></i><i></i><i></i></span><span class="urlpill">~ your agent</span></div>
+          <div class="cbody">
+            <h3>In your agent</h3>
+            <p>The Skill — one <span class="npx">npx</span> away. Works in Claude Code, Codex CLI, OpenClaw, Hermes Agent, Manus, and any SKILL.md runtime.</p>
+            <a class="btn btn-ghost" href="#for-builders">Get the Skill</a>
+          </div>
+        </div>
+      </div>
+      <div class="samenote">Same agent. Same models. Your choice of where it lives.</div>
+    </section>
+
+    <!-- BROWSER SHOWCASE -->
+    <section class="section showcase">
+      <img class="bgart" src="images/img11.png" alt="">
+      <div class="eyebrow" style="justify-content:center;margin-bottom:26px">See it in action</div>
+      <div class="showgrid one">
+        <div class="bmock">
+          <div class="winbar"><span class="tl"><i></i><i></i><i></i></span><span class="urlpill">chat.sogni.ai</span></div>
+          <video src="images/chatdemo2.mp4" autoplay muted loop playsinline controls></video>
+        </div>
+      </div>
+    </section>
+
+    <!-- WHAT IT CREATES -->
+    <section class="section creates">
+      <img class="bgart" src="images/img04.png" alt="">
+      <div style="max-width:1200px;margin:0 auto;width:100%">
+        <div class="eyebrow">What it creates</div>
+        <h2>Finished media, not just prompts.</h2>
+      </div>
+      <div class="ccards">
+        <div class="ccard">
+          <div class="media">
+            <img src="images/img01.png" alt="">
+            <span class="mlabel">z-image-turbo · 4s</span>
+          </div>
+          <div class="cc-body">
+            <h3>Images</h3>
+            <ul>
+              <li>Generate from text</li>
+              <li>Edit &amp; inpaint</li>
+              <li>Style transfer</li>
+              <li>GPT Image 2 storyboards</li>
+              <li>Photobooth face transfer</li>
+              <li>Restore old photos</li>
+            </ul>
+          </div>
+        </div>
+        <div class="ccard">
+          <div class="media">
+            <video src="images/monalisa.mp4" autoplay muted loop playsinline></video>
+            <span class="mlabel">seedance 2.0 · native audio</span>
+          </div>
+          <div class="cc-body">
+            <h3>Video</h3>
+            <ul>
+              <li>Text → video</li>
+              <li>Image → video</li>
+              <li>Seedance 2.0</li>
+              <li>LTX-2.3 &amp; WAN 2.2</li>
+              <li>Lip-sync</li>
+            </ul>
+          </div>
+        </div>
+        <div class="ccard">
+          <div class="media">
+            <div class="wave">
+              <span style="height:40%"></span><span style="height:66%"></span><span style="height:50%"></span><span style="height:82%"></span><span style="height:56%"></span><span style="height:72%"></span><span style="height:46%"></span><span style="height:86%"></span><span style="height:60%"></span><span style="height:76%"></span><span style="height:50%"></span><span style="height:68%"></span><span style="height:42%"></span><span style="height:80%"></span><span style="height:58%"></span><span style="height:72%"></span><span style="height:48%"></span><span style="height:64%"></span>
+            </div>
+          </div>
+          <div class="cc-body">
+            <h3>Music</h3>
+            <ul>
+              <li>Full songs with lyrics</li>
+              <li>Instrumentals</li>
+              <li>BPM &amp; key control</li>
+              <li>Vocal styles</li>
+              <li>Theme songs</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PHOTO TO FINISHED AD -->
+    <section class="section ad">
+      <img class="bgart" src="images/img06.png" alt="">
+      <div style="max-width:1200px;margin:0 auto;width:100%">
+        <div class="eyebrow">From photo to finished ad</div>
+        <h2>One product shot in. A finished ad out.</h2>
+        <p class="adsub">The CLOUDSTEP "Walk on Clouds" spot — reference photo to a 15-second video, made in a single Sogni chat. Same three steps, every time.</p>
+      </div>
+      <div class="adgrid">
+        <div class="adstep">
+          <div class="adnum">1</div>
+          <div class="admedia"><img src="images/ad-ref-new.png" alt="Reference"></div>
+          <div class="adcap">Drop a reference</div>
+          <p class="addesc">Start with one real product photo. The agent locks its shape, color, and logo so every shot stays on-brand.</p>
+        </div>
+        <div class="adstep">
+          <div class="adnum">2</div>
+          <div class="admedia zoomable" data-enlarge="images/ad-story-new.png"><img src="images/ad-story-new.png" alt="Storyboard"><span class="adtag">⤢ Enlarge</span></div>
+          <div class="adcap">Get a storyboard</div>
+          <p class="addesc">Describe the ad and it plans the whole spot — nine beats with timecodes and voice-over — rendered as a single storyboard sheet.</p>
+        </div>
+        <div class="adstep">
+          <div class="adnum">3</div>
+          <div class="admedia"><video src="images/ad-final.mp4" autoplay muted loop playsinline controls></video></div>
+          <div class="adcap">Render the ad</div>
+          <p class="addesc">Each panel becomes a keyframe. Seedance animates the cuts with motion, pacing, and native audio — out comes the finished video.</p>
+        </div>
+      </div>
+      <div style="max-width:1200px;margin:0 auto;width:100%">
+        <a class="adlink" href="https://docs.sogni.ai/sogni-intelligence/creative-agent-skill/" target="_blank" rel="noopener">Read the full guide ↗</a>
+      </div>
+    </section>
+
+    <!-- VIRTUAL INFLUENCER -->
+    <section class="section vinf">
+      <img class="bgart" src="images/img11.png" alt="">
+      <div style="max-width:1080px;margin:0 auto;width:100%">
+        <div class="eyebrow">Virtual influencer</div>
+        <h2>Your always-on virtual influencer.</h2>
+        <p class="vsub">One persona, endless UGC — product demos, skincare routines, brand ads. Generated and animated on Sogni, ready to post.</p>
+      </div>
+      <div class="vgrid">
+        <div class="vcard"><video src="images/inf1.mp4" autoplay muted loop playsinline controls></video></div>
+        <div class="vcard"><video src="images/inf2.mp4" autoplay muted loop playsinline controls></video></div>
+        <div class="vcard"><video src="images/inf3-trim.mp4" autoplay muted loop playsinline controls></video></div>
+      </div>
+    </section>
+
+    <!-- SUPERPOWERS -->
+    <section class="section powers">
+      <img class="bgart" src="images/img12.png" alt="">
+      <div style="max-width:1200px;margin:0 auto;width:100%">
+        <div class="eyebrow">Superpowers</div>
+        <h2>More than a prompt box.</h2>
+      </div>
+      <div class="pgrid">
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
+          <h3>Personas</h3><p>Saved faces &amp; voices — put the same person in every render.</p>
+        </div>
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5"/><path d="M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/></svg></div>
+          <h3>Memory</h3><p>Remembers your style, projects, and preferences across sessions.</p>
+        </div>
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg></div>
+          <h3>Personality</h3><p>Custom instructions shape how it plans and what it makes.</p>
+        </div>
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div>
+          <h3>Durable workflows</h3><p>Multi-step jobs survive disconnects and pick up where they left off.</p>
+        </div>
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><ellipse cx="12" cy="12" rx="10" ry="4.4" transform="rotate(-28 12 12)"/></svg></div>
+          <h3>Style &amp; angles</h3><p>Style transfer and 360° turnarounds from a single reference.</p>
+        </div>
+        <div class="pcard">
+          <div class="pico"><svg viewBox="0 0 24 24"><path d="M3.34 19a10 10 0 1 1 17.32 0"/><path d="M12 14l4-4"/></svg></div>
+          <h3>Cost controls</h3><p>Up-front estimates, spend ceilings, and a free-Spark fallback.</p>
+        </div>
+      </div>
+      <div style="text-align:center;width:100%;margin-top:26px">
+        <a class="btn btn-primary" href="https://blog.sogni.ai" target="_blank" rel="noopener">See what you can build with the Sogni Creative Agent, step by step ↗</a>
+      </div>
+    </section>
+
+    <!-- FOR BUILDERS -->
+    <section class="section" id="for-builders">
+      <img class="bgart" src="images/img09.png" alt="">
+      <div class="fb">
+        <div class="eyebrow">For builders</div>
+        <h2>Give <span class="accent">your</span> agent creative superpowers.</h2>
+        <p class="lead">Install the Sogni Creative Agent Skill into any SKILL.md runtime — one command, and your agent can generate images, video, and music on the Supernet.</p>
+        <div class="term2">
+          <div class="top"><span>install — sogni creative agent skill</span><span class="ver">v3.4 · MIT · node ≥ 22</span></div>
+          <div class="row fastest">
+            <span class="tag">FASTEST</span>
+            <span class="cmd"><span class="d">$</span> npx setup-sogni-agent-skill<span class="desc">auto-detects Claude Code, Codex CLI &amp; Hermes · installs CLI + skill · prompts for your API key</span></span>
+            <button class="copy" data-copy="npx setup-sogni-agent-skill">Copy</button>
+          </div>
+          <div class="row">
+            <span class="tag">NPM</span>
+            <span class="cmd">npm install -g @sogni-ai/sogni-creative-agent-skill@latest</span>
+            <button class="copy" data-copy="npm install -g @sogni-ai/sogni-creative-agent-skill@latest">Copy</button>
+          </div>
+          <div class="row">
+            <span class="tag">CLAUDE CODE</span>
+            <span class="cmd">/plugin marketplace add Sogni-AI/sogni-creative-agent-skill<br>/plugin install sogni-creative-agent@sogni</span>
+            <button class="copy" data-copy="/plugin marketplace add Sogni-AI/sogni-creative-agent-skill">Copy</button>
+          </div>
+          <div class="row">
+            <span class="tag">OPENCLAW</span>
+            <span class="cmd">openclaw plugins install sogni-creative-agent-skill</span>
+            <button class="copy" data-copy="openclaw plugins install sogni-creative-agent-skill">Copy</button>
+          </div>
+          <div class="term-foot">works with Claude Code · Codex CLI · OpenClaw · Hermes Agent · Manus · any SKILL.md runtime<br><span class="an">agent-native:</span> paste the GitHub URL into your agent and say “install this skill.”</div>
+        </div>
+        <div class="fb-btns">
+          <a class="btn btn-ghost" href="https://github.com/Sogni-AI" target="_blank" rel="noopener">GitHub repo ↗</a>
+          <a class="btn btn-ghost" href="https://docs.sogni.ai/sogni-intelligence/creative-agent-skill/" target="_blank" rel="noopener">Read the docs ↗</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- POWERED BY THE SUPERNET -->
+    <section class="section super">
+      <img class="bgart" src="images/img02.png" alt="">
+      <div class="sgrid">
+        <div>
+          <div class="eyebrow">Powered by the Supernet</div>
+          <h2>Decentralized GPUs. Pay only for what you make.</h2>
+          <p>Every render runs on Sogni's decentralized GPU network with pay-as-you-go Spark — and 400 free credits every month. No subscription required. The globe is the Supernet — live, right now.</p>
+          <div class="sbtns">
+            <a class="btn btn-ghost" href="https://www.sogni.ai/pricing" target="_blank" rel="noopener">See pricing</a>
+            <a class="btn btn-ghost" href="https://docs.sogni.ai/" target="_blank" rel="noopener">Read the docs ↗</a>
+          </div>
+        </div>
+        <div class="globe">
+          <iframe src="https://globe.sogni.ai/" title="Sogni Supernet — live globe" loading="lazy" allow="autoplay; fullscreen"></iframe>
+        </div>
+      </div>
+    </section>
+
+    <!-- START CREATING -->
+    <section class="section cta">
+      <video class="bgvid" src="images/endframe.mp4" autoplay muted loop playsinline></video>
+      <div class="cta-veil"></div>
+      <h1>Start creating in <span class="accent">30 seconds.</span></h1>
+      <div class="cta-btns">
+        <a class="btn btn-primary" href="https://chat.sogni.ai" target="_blank" rel="noopener">Launch Agent ↗</a>
+        <a class="btn btn-ghost" href="#for-builders">Install the Skill</a>
+      </div>
+      <div class="submono">400 free credits every month. No credit card required.</div>
+    </section>
+
+    <!-- FOOTER — identical to sogni -->
+    <footer class="footer">
+      <div class="f-top">
+        <div class="f-left">
+          <a class="flogo" href="https://www.sogni.ai" target="_blank" rel="noopener" aria-label="Sogni">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 387 160"><path fill="currentColor" d="M17.2,106.99c5.33,2.29,11.3,3.41,17.95,3.41,7.03,0,13.11-1.33,18.23-3.98,5.23-2.75,9.17-6.34,11.82-10.81,2.76-4.44,4.12-9.19,4.12-14.2,0-6.24-1.47-11.22-4.43-14.92-2.86-3.8-6.36-6.57-10.53-8.37-4.09-1.8-9.4-3.59-15.96-5.39-4.94-1.34-8.83-2.57-11.69-3.7-2.86-1.13-5.23-2.64-7.13-4.54-1.8-1.98-2.7-4.49-2.7-7.52,0-4.44,1.47-7.86,4.4-10.22,2.94-2.36,6.75-3.54,11.41-3.54,5.12,0,9.27,1.28,12.39,3.83,3.14,2.57,4.84,5.62,5.12,9.24h17.95c-.67-8.34-4.09-14.87-10.25-19.62-6.08-4.83-13.9-7.24-23.51-7.24-6.75,0-12.67,1.13-17.82,3.41-5.12,2.29-9.11,5.55-11.97,9.81C1.73,26.91.31,31.89.31,37.56c0,6.16,1.42,11.09,4.27,14.76,2.86,3.7,6.28,6.44,10.25,8.24,4.09,1.69,9.35,3.42,15.81,5.11,5.12,1.34,9.11,2.57,11.97,3.7,2.94,1.13,5.36,2.75,7.26,4.83,1.98,2.08,2.99,4.78,2.99,8.09,0,4.26-1.57,7.75-4.71,10.5-3.104,2.64-7.49,3.98-13.11,3.98s-9.63-1.36-12.67-4.11c-2.94-2.75-4.61-6.24-5-10.5H0c0,5.67,1.52,10.66,4.56,14.92,3.04,4.26,7.21,7.57,12.54,9.94l.1-.03ZM102.48,105.71c5.97,3.31,12.67,4.98,20.08,4.98s14.34-1.67,20.52-4.98c6.28-3.42,11.2-8.19,14.83-14.35,3.6-6.16,5.41-13.22,5.41-21.16s-1.75-15.02-5.28-21.16c-3.53-6.14-8.32-10.89-14.39-14.2-6.08-3.31-12.87-4.98-20.37-4.98s-14.29,1.67-20.37,4.98c-6.08,3.31-10.87,8.06-14.39,14.2-3.53,6.16-5.28,13.22-5.28,21.16s1.7,15.15,5.12,21.31c3.42,6.06,8.11,10.81,14.11,14.2ZM134.25,93.64c-3.61,1.98-7.49,2.98-11.69,2.98-6.54,0-12.03-2.29-16.38-6.83-4.27-4.65-6.41-11.17-6.41-19.62,0-5.67,1.06-10.48,3.14-14.35,2.08-3.98,4.89-6.96,8.39-8.96,3.61-1.98,7.49-2.98,11.69-2.98s8.08,1,11.69,2.98c3.6,1.98,6.51,4.98,8.7,8.96,2.19,3.88,3.27,8.68,3.27,14.35s-1.13,10.5-3.42,14.48c-2.29,3.98-5.28,6.96-8.99,8.96v.03ZM227.1,33.53c-4.66-2.46-10.02-3.7-16.09-3.7-6.85,0-13.11,1.69-18.8,5.11-5.61,3.31-10.07,8.01-13.39,14.07-3.22,6.06-4.84,13.02-4.84,20.88s1.62,14.92,4.84,21.16c3.32,6.16,7.78,10.99,13.39,14.48,5.69,3.42,11.97,5.11,18.8,5.11,5.97,0,11.3-1.23,15.96-3.7,4.74-2.57,8.5-5.67,11.25-9.37v13.07c0,7.57-2.03,13.35-6.13,17.33-3.99,3.98-9.27,5.96-15.81,5.96-5.61,0-10.45-1.28-14.52-3.83-3.99-2.46-6.59-5.72-7.83-9.81h-16.09c.95,8.53,4.94,15.25,11.97,20.18,7.03,5.03,15.86,7.52,26.5,7.52,7.98,0,14.81-1.62,20.52-4.83,5.79-3.21,10.22-7.68,13.26-13.35,3.04-5.6,4.56-11.99,4.56-19.18V31.07h-16.38v11.37c-2.65-3.59-6.36-6.57-11.12-8.96l-.05.05ZM234.8,56.13c2.29,3.98,3.42,8.68,3.42,14.07s-1.13,10.14-3.42,14.2c-2.19,3.98-5.07,7.01-8.7,9.09-3.61,2.08-7.49,3.13-11.69,3.13s-7.98-1.05-11.69-3.13c-3.6-2.18-6.57-5.32-8.83-9.37-2.19-4.08-3.27-8.81-3.27-14.2s1.08-10.04,3.27-13.92c2.29-3.98,5.23-6.96,8.83-8.96,3.6-2.08,7.49-3.13,11.69-3.13s8.08,1.05,11.69,3.13c3.6,2.08,6.51,5.11,8.7,9.09ZM332.08,33.69c-4.84-2.57-10.35-3.83-16.53-3.83-4.66,0-9.06.9-13.26,2.7-4.09,1.8-7.47,4.31-10.12,7.52v-8.96h-16.25v78.29h16.25v-43.75c0-7.01,1.75-12.35,5.28-16.05,3.61-3.8,8.45-5.67,14.52-5.67s10.87,1.9,14.39,5.67c3.5,3.7,5.28,9.04,5.28,16.05v43.75h16.09v-46.17c0-7.11-1.37-13.17-4.12-18.18-2.76-5.03-6.59-8.81-11.54-11.37ZM369.34,17.77c1.98,1.98,4.45,2.98,7.42,2.98s5.28-1,7.26-2.98c1.98-1.98,2.99-4.44,2.99-7.39s-1-5.39-2.99-7.39c-1.98-1.98-4.43-2.98-7.26-2.98s-5.41,1-7.42,2.98c-1.98,1.98-2.99,4.44-2.99,7.39s1,5.39,2.99,7.39ZM384.71,109.41V31.12h-16.25v78.29h16.25Z"></path></svg>
+          </a>
+          <div class="f-social">
+            <a href="https://x.com/sogni_ai" target="_blank" rel="noopener" aria-label="X"><svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231 5.45-6.231Zm-1.161 17.52h1.833L7.084 4.126H5.117L17.083 19.77Z"/></svg></a>
+            <a href="https://discord.gg/sogni" target="_blank" rel="noopener" aria-label="Discord"><svg viewBox="0 0 24 24"><path d="M20.317 4.369a19.79 19.79 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.6 12.6 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 0 0 .031.057 19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 0 0-.041-.106 13.1 13.1 0 0 1-1.872-.892.077.077 0 0 1-.008-.128c.126-.094.252-.192.372-.291a.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.009c.12.099.246.198.373.292a.077.077 0 0 1-.006.127 12.3 12.3 0 0 1-1.873.891.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.84 19.84 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03ZM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418Zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418Z"/></svg></a>
+            <a href="https://t.me/sogni" target="_blank" rel="noopener" aria-label="Telegram"><svg viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0Zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635Z"/></svg></a>
+            <a href="https://github.com/Sogni-AI" target="_blank" rel="noopener" aria-label="GitHub"><svg viewBox="0 0 24 24"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></a>
+            <a href="https://youtube.com/@sogni" target="_blank" rel="noopener" aria-label="YouTube"><svg viewBox="0 0 24 24"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814ZM9.545 15.568V8.432L15.818 12l-6.273 3.568Z"/></svg></a>
+            <a href="https://instagram.com/sogni_ai" target="_blank" rel="noopener" aria-label="Instagram"><svg viewBox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069ZM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0Zm0 5.838a6.162 6.162 0 1 0 0 12.324 6.162 6.162 0 0 0 0-12.324ZM12 16a4 4 0 1 1 0-8 4 4 0 0 1 0 8Zm6.406-11.845a1.44 1.44 0 1 0 0 2.881 1.44 1.44 0 0 0 0-2.881Z"/></svg></a>
+            <a href="https://tiktok.com/@sogni" target="_blank" rel="noopener" aria-label="TikTok"><svg viewBox="0 0 24 24"><path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07Z"/></svg></a>
+            <a href="https://medium.com/@sogni" target="_blank" rel="noopener" aria-label="Medium"><svg viewBox="0 0 24 24"><path d="M13.54 12a6.8 6.8 0 0 1-6.77 6.82A6.8 6.8 0 0 1 0 12a6.8 6.8 0 0 1 6.77-6.82A6.8 6.8 0 0 1 13.54 12Zm7.42 0c0 3.54-1.51 6.42-3.38 6.42-1.87 0-3.39-2.88-3.39-6.42s1.52-6.42 3.39-6.42 3.38 2.88 3.38 6.42M24 12c0 3.17-.53 5.75-1.19 5.75-.66 0-1.19-2.58-1.19-5.75s.53-5.75 1.19-5.75C23.47 6.25 24 8.83 24 12Z"/></svg></a>
+          </div>
+        </div>
+        <div class="f-right">
+          <h4>Stay in the loop with updates</h4>
+          <form class="f-sub" onsubmit="return false">
+            <input type="email" placeholder="Enter your email" aria-label="Email">
+            <button type="submit">Subscribe</button>
+          </form>
+          <div class="f-note">We care about your data in our <a href="https://www.sogni.ai" target="_blank" rel="noopener">privacy policy</a>.</div>
+          <a class="f-waitlist" href="https://www.sogni.ai" target="_blank" rel="noopener">Join our product-specific waitlists</a>
+        </div>
+      </div>
+      <div class="f-bottom">
+        <span>© 2024 Sogni. Imagined with ❤️ by <a href="https://www.sogni.ai" target="_blank" rel="noopener">we&amp;robot</a></span>
+        <span class="fl"><a href="https://www.sogni.ai" target="_blank" rel="noopener">Privacy Policy &amp; Terms</a><a href="#">Manage Cookies</a></span>
+      </div>
+    </footer>
+
+  </main>
+
+  <div class="lightbox" id="lightbox"><span class="lbclose" aria-label="Close">×</span><img id="lbimg" src="" alt="Full size"></div>
+
+<script>
+  const scroller = document.getElementById('scroller');
+
+  // reveal each caption when its slide scrolls into view
+  const caps = document.querySelectorAll('.cap');
+  const io = new IntersectionObserver((entries)=>{
+    entries.forEach(e=>{
+      if (e.isIntersecting) e.target.classList.add('in');
+      else e.target.classList.remove('in');
+    });
+  }, { root: scroller, threshold: 0.5 });
+  caps.forEach(c=>io.observe(c));
+
+  // scrolling is handled natively by CSS scroll-snap (robust on every mouse / touchpad)
+
+  // flying prompt marquee
+  const prompts = ['“video of a cat playing piano”','“give it a 360° turnaround”','“storyboard a 15-second ad”','“draw me as a 90s anime hero”','“animate this photo”','“make album art, lo-fi”'];
+  const pt = document.getElementById('ptrack');
+  if (pt){ let s=''; for(let r=0;r<2;r++){ prompts.forEach(p=>{ s+='<span>'+p+'</span><span class="sep">✦</span>'; }); } pt.innerHTML = s; }
+
+  // infinity-loop background for the browser/agent section
+  const lc = document.getElementById('loopcol1');
+  if (lc){ let s=''; for(let c=0;c<2;c++){ for(let i=1;i<=13;i++){ s += '<img src="images/img'+String(i).padStart(2,'0')+'.png" alt="">'; } } lc.innerHTML = s; }
+
+  // copy buttons
+  document.querySelectorAll('.copy').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copy);
+      const t = b.textContent; b.textContent = 'Copied ✓';
+      setTimeout(()=> b.textContent = t, 1200);
+    });
+  });
+
+  // in-page anchor links scroll the snap container to the target section
+  document.querySelectorAll('a[href^="#"]').forEach(a=>{
+    a.addEventListener('click', (e)=>{
+      const id = a.getAttribute('href').slice(1);
+      if (!id) return;
+      const t = document.getElementById(id);
+      if (t){ e.preventDefault(); scroller.scrollTo({ top: t.offsetTop, behavior: 'smooth' }); }
+    });
+  });
+
+  // enlarge / lightbox
+  const lb = document.getElementById('lightbox'), lbimg = document.getElementById('lbimg');
+  document.querySelectorAll('[data-enlarge]').forEach(el=>{
+    el.addEventListener('click', (e)=>{ e.stopPropagation(); lbimg.src = el.getAttribute('data-enlarge'); lb.classList.add('open'); });
+  });
+  if (lb) lb.addEventListener('click', ()=> lb.classList.remove('open'));
+  window.addEventListener('keydown', (e)=>{ if (e.key === 'Escape' && lb) lb.classList.remove('open'); });
+
+  // top menu non-clickable for now (hover/expand still works)
+  document.querySelectorAll('.topbar a').forEach(a=>{
+    a.addEventListener('click', (e)=> e.preventDefault());
+    a.style.cursor = 'default';
+  });
+</script>
+</body>
+</html>
